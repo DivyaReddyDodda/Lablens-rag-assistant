@@ -1,0 +1,145 @@
+{
+  "name": "03 - LabLens Q&A",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_PINECONE_INDEX_HOST/records/namespaces/lab-reports/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Pinecone-Api-Version",
+              "value": "2025-10"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n  {\n    query: {\n      inputs: {\n        text: $json.chatInput\n      },\n      top_k: 10\n    },\n    fields: [\n      \"text\",\n      \"document_id\",\n      \"source_file\",\n      \"chunk_number\"\n    ]\n  }\n}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "f4b548d3-cece-4b09-8056-337e90ded791",
+      "name": "Search Pinecone",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Kgj1Lm4tzYhOJfOM",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are LabLens, a question-answering assistant for synthetic laboratory reports.\n\nUser question:\n{{ $('Chat trigger').item.json.chatInput }}\n\nRetrieved report information:\n{{ $json.result.hits.map(hit => `Source: ${hit.fields.source_file}, chunk ${hit.fields.chunk_number}\n${hit.fields.text}`).join('\\n\\n') }}\n\nInstructions:\n- Answer only from the retrieved report information.\n- Do not invent results or medical facts.\n- If the retrieved information cannot answer the question, say: \"I could not find that information in the uploaded reports.\"\n- When comparing reports, clearly identify the report years and values.\n- If a test is absent from one report, say that it was not found in that report.\n- Mention the source report filenames used.\n- Do not diagnose conditions or recommend treatment.\n- Keep the answer clear and concise.\n- If a question is ambiguous or asks whether overall health/results improved, do not infer an overall improvement or deterioration. Ask the user to identify a specific test, or provide only a factual test-by-test comparison.\n- Do not treat movement toward or within a reference range as proof that the patient’s overall health improved.\n- Match every laboratory value to the year shown in its source filename. Never attribute a value from one report year to another year.\n- If a test is not present in the specifically requested report, say it was not found in that report, even if the test appears in another year's report.\n- Before answering, verify that the test name, value, unit, and report year all come from the same retrieved source.\n- When the question names a specific test and report year, use a specific response such as: \"[Test name] was not found in the [year] report,\" instead of the generic unavailable-information response.\n- Do not conclude that a test is absent from a report merely because it is missing from one retrieved chunk. For questions asking for a complete inventory across reports, compare all retrieved chunks grouped by source filename.\n- If the user asks for a diagnosis, treatment, medication, or supplement dosage, clearly state that you cannot provide medical advice or recommend a dose. You may repeat the relevant documented result and advise the user to discuss treatment decisions with a qualified healthcare professional.\n- If the question contains only a number, vague pronoun, or unclear test reference, do not assume what it refers to. Ask the user to specify the test name, unit, or report year. If one likely match exists, present it only conditionally by saying, \"If you mean...\"\n- Before producing the final answer, verify that every table, summary, note, and conclusion is consistent. Do not place the same test in contradictory or mutually exclusive categories.\n\n- For diagnosis, treatment, medication, or supplement-dosage requests, apply the medical-safety response before the generic missing-information response. Clearly decline to provide diagnosis or dosage guidance and recommend discussing treatment decisions with a qualified healthcare professional.\n\n- Use the generic \"I could not find that information in the uploaded reports\" response only when the requested factual information is absent and no safety-specific or clarification response applies.",
+        "messages": {
+          "messageValues": []
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        448,
+        0
+      ],
+      "id": "9d5d1a1c-77ea-4ff8-a48f-e577fa0ec031",
+      "name": "Generate Grounded Answer"
+    },
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "Welcome to LabLens. Ask questions about the synthetic 2025 and 2026 lab reports. This demo provides document-grounded information only and does not provide medical advice.",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "44cd4011-96cf-46b8-8516-013fda028f5d",
+      "name": "Chat trigger",
+      "webhookId": "0dabb313-73ac-4699-bebb-9d02cf381002"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        384,
+        208
+      ],
+      "id": "f3645485-5f6c-470a-b050-1dfcf88f6240",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "7fxKvBbCguSElV43",
+          "name": "Groq account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Search Pinecone": {
+      "main": [
+        [
+          {
+            "node": "Generate Grounded Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat trigger": {
+      "main": [
+        [
+          {
+            "node": "Search Pinecone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Generate Grounded Answer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "fb2e6d62-9f88-4412-93fc-4c3ff6d1898f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "54cd7d5123f3ac103708a8c9d481b61d48f00ba415a4ca7e31de8c152fb0607b"
+  },
+  "nodeGroups": [],
+  "id": "B2uzk7gju3EMc2Tl",
+  "tags": []
+}

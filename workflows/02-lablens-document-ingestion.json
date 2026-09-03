@@ -1,0 +1,193 @@
+{
+  "name": "02 - Lablens Document Ingestion",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Lablens Document Upload",
+        "formDescription": "Upload a synthetic PDF lab report for document ingestion and retrieval testing",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Upload lab report",
+              "fieldType": "file",
+              "fieldName": "lab_report",
+              "multipleFiles": false,
+              "acceptFileTypes": ".pdf",
+              "requiredField": true
+            }
+          ]
+        },
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -576,
+        -96
+      ],
+      "id": "4d70d74b-0200-4b2c-ba65-9ec1f381cb5f",
+      "name": "On form submission",
+      "webhookId": "13bd59a5-1992-4ca7-b7d9-617364d77c2f"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "lab_report",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -352,
+        -96
+      ],
+      "id": "934db038-7485-402a-98f5-8dc8b2b0000e",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "547575b6-dffe-44db-8157-d901794cfbd4",
+              "name": "text",
+              "value": "={{$json.text}}",
+              "type": "string"
+            },
+            {
+              "id": "d61c7cc9-4a90-4e12-9dca-982fbaa25b77",
+              "name": "document_id",
+              "value": "={{ $('On form submission').item.binary.lab_report.fileName.replace('.pdf','') }}",
+              "type": "string"
+            },
+            {
+              "id": "9df63479-a702-4884-b589-950bada801cd",
+              "name": "source_file",
+              "value": "={{ $('On form submission').item.binary.lab_report.fileName }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -128,
+        -96
+      ],
+      "id": "a7d0b78e-8878-4d63-92bf-f8d410f0f015",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "jsCode": "const document = $input.first().json;\n\nconst chunkSize = 800;\nconst overlap = 150;\nconst stepSize = chunkSize - overlap;\nconst chunks = [];\n\nfor (\n  let start = 0, chunkNumber = 1;\n  start < document.text.length;\n  start += stepSize, chunkNumber++\n) {\n  const chunkText = document.text\n    .slice(start, start + chunkSize)\n    .trim();\n\n  if (chunkText) {\n    const record = {\n      _id: `${document.document_id}-chunk-${chunkNumber}`,\n      text: chunkText,\n      document_id: document.document_id,\n      source_file: document.source_file,\n      chunk_number: chunkNumber\n    };\n\n    chunks.push({\n      json: {\n        ...record,\n        ndjson: JSON.stringify(record)\n      }\n    });\n  }\n}\n\nreturn chunks;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        96,
+        -96
+      ],
+      "id": "d92e3552-535b-43c5-bb5d-d67a10bab3fa",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_PINECONE_INDEX_HOST/records/namespaces/lab-reports/upsert",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Pinecone-Api-Version",
+              "value": "2026-04"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/x-ndjson",
+        "body": "={{ $json.ndjson }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        320,
+        -96
+      ],
+      "id": "80baa1b9-e91b-4f04-b7ea-5f3b04d9a825",
+      "name": "HTTP Request",
+      "alwaysOutputData": false,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Kgj1Lm4tzYhOJfOM",
+          "name": "Header Auth account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "76fb7de4-94a8-4213-8192-3146f05a2bd9",
+  "meta": {
+    "instanceId": "54cd7d5123f3ac103708a8c9d481b61d48f00ba415a4ca7e31de8c152fb0607b"
+  },
+  "nodeGroups": [],
+  "id": "f03OjZW3fWpm8snE",
+  "tags": []
+}
